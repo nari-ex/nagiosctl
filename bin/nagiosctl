@@ -103,7 +103,9 @@ def list_host(config, hostgroup, ttl, nocache):
 @click.option("-o", "--output", type=click.File("w"), default="-")
 @click.argument("hostgroup", nargs=1)
 @click.argument("host", nargs=-1)
-def save_notification(config, output, hostgroup, host):
+@click.option("-t", "--ttl", default=60)
+@click.option("--nocache", is_flag=True)
+def save_notification(config, output, hostgroup, host, ttl, nocache):
     _config = _load_config(config)
     nagios = _config["nagios"][0]
     if host:
@@ -148,7 +150,9 @@ def save_notification(config, output, hostgroup, host):
                                                                                 "password"],
                                                                             auth_type=nagios[
                                                                                 "auth_type"],
-                                                                            hostgroup=hostgroup)
+                                                                            hostgroup=hostgroup,
+                                                                            ttl=ttl,
+                                                                            nocache=nocache)
         output.write(yaml.dump({"host_notifications": host_notifications,
                                 "service_notifications": service_notifications}))
 
@@ -291,7 +295,8 @@ def _retrive_host_notifications(url="", username="", password="", auth_type="bas
     return sorted(host_list)
 
 
-def _retrive_service_notifications_by_hostgroup(url="", username="", password="", auth_type="basic", hostgroup=None):
+def _retrive_service_notifications_by_hostgroup(url="", username="", password="", auth_type="basic", hostgroup=None,
+                                                ttl=60, nocache=False):
     logger.debug("hostgroup: %s", hostgroup)
     if not hostgroup:
         logger.error("ERROR: hostgroup required.")
@@ -308,7 +313,7 @@ def _retrive_service_notifications_by_hostgroup(url="", username="", password=""
     r = requests.get(full_url, params=payload, auth=auth)
     if r.status_code != 200:
         logger.error("ERROR: fail to retrive json. %s", r.text)
-        hosts = _retrive_hosts(url, username, password, auth_type, hostgroup)
+        hosts = _memoize(ttl, nocache)(_retrive_hosts)(url, username, password, auth_type, hostgroup)
         host_list = []
         for host in hosts:
             try:
